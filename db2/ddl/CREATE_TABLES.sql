@@ -1,0 +1,110 @@
+-- ====================================================================
+-- CREATE_TABLES.SQL - DB2 TABLE DEFINITIONS
+-- CREDIT CARD PROCESSING SYSTEM
+-- ====================================================================
+
+-- ====================================================================
+-- TABLE: CREDIT_ACCOUNT
+-- PURPOSE: STORES CREDIT CARD ACCOUNT INFORMATION
+-- ====================================================================
+CREATE TABLE CREDIT_ACCOUNT (
+    ACCOUNT_NUMBER     CHAR(6) NOT NULL,
+    CUSTOMER_NAME      VARCHAR(50) NOT NULL,
+    CURRENT_BALANCE    DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    CREDIT_LIMIT       DECIMAL(10,2) NOT NULL DEFAULT 1000.00,
+    LAST_PAYMENT_DATE  DATE,
+    ACCOUNT_STATUS     CHAR(1) NOT NULL DEFAULT 'A',
+    CREATED_DATE       TIMESTAMP NOT NULL DEFAULT CURRENT TIMESTAMP,
+    MODIFIED_DATE      TIMESTAMP NOT NULL DEFAULT CURRENT TIMESTAMP,
+    
+    CONSTRAINT PK_CREDIT_ACCOUNT PRIMARY KEY (ACCOUNT_NUMBER),
+    CONSTRAINT CHK_ACCOUNT_STATUS 
+        CHECK (ACCOUNT_STATUS IN ('A', 'C', 'S')),
+    CONSTRAINT CHK_BALANCE 
+        CHECK (CURRENT_BALANCE >= 0),
+    CONSTRAINT CHK_CREDIT_LIMIT 
+        CHECK (CREDIT_LIMIT > 0)
+) IN DATABASE CCARDDB;
+
+COMMENT ON TABLE CREDIT_ACCOUNT IS 
+    'Credit card account master table';
+COMMENT ON COLUMN CREDIT_ACCOUNT.ACCOUNT_NUMBER IS 
+    'Unique 6-digit account number';
+COMMENT ON COLUMN CREDIT_ACCOUNT.CUSTOMER_NAME IS 
+    'Customer full name';
+COMMENT ON COLUMN CREDIT_ACCOUNT.CURRENT_BALANCE IS 
+    'Current outstanding balance';
+COMMENT ON COLUMN CREDIT_ACCOUNT.CREDIT_LIMIT IS 
+    'Maximum credit limit';
+COMMENT ON COLUMN CREDIT_ACCOUNT.ACCOUNT_STATUS IS 
+    'A=Active, C=Closed, S=Suspended';
+
+-- ====================================================================
+-- TABLE: TRANSACTION_LOG
+-- PURPOSE: STORES ALL CREDIT CARD TRANSACTIONS
+-- ====================================================================
+CREATE TABLE TRANSACTION_LOG (
+    TRANSACTION_ID     INTEGER NOT NULL GENERATED ALWAYS AS IDENTITY 
+                       (START WITH 1 INCREMENT BY 1),
+    ACCOUNT_NUMBER     CHAR(6) NOT NULL,
+    TRANSACTION_TYPE   CHAR(8) NOT NULL,
+    AMOUNT             DECIMAL(10,2) NOT NULL,
+    MERCHANT_ID        VARCHAR(10),
+    TRANSACTION_DATE   TIMESTAMP NOT NULL DEFAULT CURRENT TIMESTAMP,
+    BALANCE_AFTER      DECIMAL(10,2) NOT NULL,
+    PROCESSED_BY       CHAR(10),
+    
+    CONSTRAINT PK_TRANSACTION_LOG PRIMARY KEY (TRANSACTION_ID),
+    CONSTRAINT FK_TRANSACTION_ACCOUNT 
+        FOREIGN KEY (ACCOUNT_NUMBER) 
+        REFERENCES CREDIT_ACCOUNT (ACCOUNT_NUMBER)
+        ON DELETE RESTRICT,
+    CONSTRAINT CHK_TRAN_TYPE 
+        CHECK (TRANSACTION_TYPE IN ('PURCHASE', 'PAYMENT')),
+    CONSTRAINT CHK_TRAN_AMOUNT 
+        CHECK (AMOUNT > 0)
+) IN DATABASE CCARDDB;
+
+COMMENT ON TABLE TRANSACTION_LOG IS 
+    'Transaction history and audit log';
+COMMENT ON COLUMN TRANSACTION_LOG.TRANSACTION_ID IS 
+    'Auto-generated transaction ID';
+COMMENT ON COLUMN TRANSACTION_LOG.TRANSACTION_TYPE IS 
+    'PURCHASE or PAYMENT';
+COMMENT ON COLUMN TRANSACTION_LOG.PROCESSED_BY IS 
+    'Batch ID or User ID who processed';
+
+-- ====================================================================
+-- TABLE: BATCH_CONTROL
+-- PURPOSE: TRACKS BATCH PROCESSING RUNS
+-- ====================================================================
+CREATE TABLE BATCH_CONTROL (
+    BATCH_ID           CHAR(10) NOT NULL,
+    BATCH_DATE         DATE NOT NULL,
+    START_TIME         TIMESTAMP NOT NULL,
+    END_TIME           TIMESTAMP,
+    TRANSACTIONS_READ  INTEGER DEFAULT 0,
+    TRANSACTIONS_PROC  INTEGER DEFAULT 0,
+    TRANSACTIONS_REJ   INTEGER DEFAULT 0,
+    BATCH_STATUS       CHAR(1) DEFAULT 'R',
+    
+    CONSTRAINT PK_BATCH_CONTROL PRIMARY KEY (BATCH_ID),
+    CONSTRAINT CHK_BATCH_STATUS 
+        CHECK (BATCH_STATUS IN ('R', 'C', 'E'))
+) IN DATABASE CCARDDB;
+
+COMMENT ON TABLE BATCH_CONTROL IS 
+    'Batch processing control and statistics';
+COMMENT ON COLUMN BATCH_CONTROL.BATCH_STATUS IS 
+    'R=Running, C=Complete, E=Error';
+
+-- ====================================================================
+-- GRANT PERMISSIONS
+-- ====================================================================
+GRANT SELECT, INSERT, UPDATE ON CREDIT_ACCOUNT TO PUBLIC;
+GRANT SELECT, INSERT ON TRANSACTION_LOG TO PUBLIC;
+GRANT SELECT, INSERT, UPDATE ON BATCH_CONTROL TO PUBLIC;
+
+-- ====================================================================
+-- END OF CREATE_TABLES.SQL
+-- ====================================================================
